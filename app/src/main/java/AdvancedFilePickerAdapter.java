@@ -65,7 +65,7 @@ public class AdvancedFilePickerAdapter extends RecyclerView.Adapter<AdvancedFile
         holder.thumbnailImage.setTag(file.getAbsolutePath());
 
         if (file.isDirectory()) {
-            holder.thumbnailImage.setImageResource(android.R.drawable.ic_menu_myplaces);
+            holder.thumbnailImage.setImageResource(R.drawable.ic_folder_modern);
             holder.selectionCheckbox.setVisibility(View.GONE);
             holder.selectionOverlay.setVisibility(View.GONE);
         } else {
@@ -245,4 +245,3 @@ public class AdvancedFilePickerAdapter extends RecyclerView.Adapter<AdvancedFile
         }
     }
 }
-
