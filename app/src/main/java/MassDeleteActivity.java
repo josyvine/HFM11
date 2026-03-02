@@ -18,6 +18,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.text.Editable;
+import android.text.Html;
 import android.text.TextWatcher;
 import android.text.format.Formatter;
 import android.util.Log;
@@ -531,13 +532,33 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 			.setPositiveButton("Delete Permanently", new DialogInterface.OnClickListener() {
 				@Override
 				public void onClick(DialogInterface dialog, int which) {
-					performDelete(toDelete);
+					// NEW LOGIC: Ask for Batch Size (Enhancement 4)
+                    final String[] batchOptions = {"1 (Single)", "5 at a time", "10 at a time", "20 at a time", "30 at a time"};
+                    final int[] batchValues = {1, 5, 10, 20, 30};
+
+                    new AlertDialog.Builder(MassDeleteActivity.this)
+                        .setTitle("Select Deletion Speed")
+                        .setItems(batchOptions, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int index) {
+                                performDelete(toDelete, batchValues[index]); // Pass chosen size
+                            }
+                        }).show();
 				}
 			})
             .setNeutralButton("Move to Recycle", new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
-                    moveToRecycleBin(toDelete);
+                    // NEW LOGIC: Ask Phone or SD Card (Enhancement 2)
+                    AlertDialog.Builder binBuilder = new AlertDialog.Builder(MassDeleteActivity.this);
+                    binBuilder.setTitle("Choose Recycle Bin");
+                    binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialogInterface, int whichBin) {
+                            new MoveToRecycleTask(toDelete, whichBin == 1).execute();
+                        }
+                    });
+                    binBuilder.show();
                 }
             })
             .setNegativeButton("Hide Files", new DialogInterface.OnClickListener() {
@@ -569,10 +590,11 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
     }
 
     private void moveToRecycleBin(List<MassDeleteAdapter.SearchResult> resultsToMove) {
-        new MoveToRecycleTask(resultsToMove).execute();
+        // Updated to use the default MoveToRecycleTask which now asks for confirmation internally in this file
+        // However, we refactored confirmAndDelete to call MoveToRecycleTask directly with boolean
     }
 
-    private void performDelete(final List<MassDeleteAdapter.SearchResult> toDelete) {
+    private void performDelete(final List<MassDeleteAdapter.SearchResult> toDelete, int batchSize) {
         ArrayList<String> filePathsToDelete = new ArrayList<>();
         for (MassDeleteAdapter.SearchResult item : toDelete) {
             File file = getFileFromResult(item);
@@ -592,6 +614,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 
         Intent intent = new Intent(this, DeleteService.class);
         intent.putStringArrayListExtra(DeleteService.EXTRA_FILES_TO_DELETE, filePathsToDelete);
+        intent.putExtra("batch_size", batchSize); // Enhancement 4: Pass batch size
         ContextCompat.startForegroundService(this, intent);
     }
 
@@ -846,7 +869,16 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         recycleButton.setOnClickListener(new View.OnClickListener() {
 				@Override
 				public void onClick(View v) {
-					moveToRecycleBin(selectedResults);
+                    // Dialog to choose phone or SD bin (Enhancement 2)
+                    AlertDialog.Builder binBuilder = new AlertDialog.Builder(MassDeleteActivity.this);
+                    binBuilder.setTitle("Choose Recycle Bin");
+                    binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialogInterface, int which) {
+                            new MoveToRecycleTask(selectedResults, which == 1).execute();
+                        }
+                    });
+                    binBuilder.show();
 					dialog.dismiss();
 				}
 			});
@@ -998,10 +1030,12 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         private AlertDialog progressDialog;
         private List<MassDeleteAdapter.SearchResult> resultsToMove;
         private Context context;
+        private boolean useSdCardBin;
 
-        public MoveToRecycleTask(List<MassDeleteAdapter.SearchResult> resultsToMove) {
+        public MoveToRecycleTask(List<MassDeleteAdapter.SearchResult> resultsToMove, boolean useSdCardBin) {
             this.resultsToMove = resultsToMove;
             this.context = MassDeleteActivity.this;
+            this.useSdCardBin = useSdCardBin;
         }
 
         @Override
@@ -1016,56 +1050,56 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 
         @Override
         protected List<MassDeleteAdapter.SearchResult> doInBackground(Void... voids) {
+            // Updated Logic for Enhancement 2: Check destination and use SAF if needed
+            
             File recycleBinDir = new File(Environment.getExternalStorageDirectory(), "HFMRecycleBin");
-            if (!recycleBinDir.exists()) {
-                if (!recycleBinDir.mkdir()) {
-                    return new ArrayList<>();
-                }
+            if (!recycleBinDir.exists() && !useSdCardBin) {
+                 if (!recycleBinDir.mkdir()) return new ArrayList<>();
             }
 
             List<MassDeleteAdapter.SearchResult> movedResults = new ArrayList<>();
             for (MassDeleteAdapter.SearchResult result : resultsToMove) {
                 File sourceFile = getFileFromResult(result);
                 if (sourceFile != null && sourceFile.exists()) {
-                    File destFile = new File(recycleBinDir, sourceFile.getName());
-
-                    if (destFile.exists()) {
-                        String name = sourceFile.getName();
-                        String extension = "";
-                        int dotIndex = name.lastIndexOf(".");
-                        if (dotIndex > 0) {
-                            extension = name.substring(dotIndex);
-                            name = name.substring(0, dotIndex);
-                        }
-                        destFile = new File(recycleBinDir, name + "_" + System.currentTimeMillis() + extension);
-                    }
-
                     boolean moveSuccess = false;
-
-                    if (sourceFile.renameTo(destFile)) {
-                        moveSuccess = true;
+                    
+                    if (useSdCardBin && StorageUtils.isFileOnSdCard(context, sourceFile)) {
+                         // Use new SAF move method
+                         if (StorageUtils.moveFileOnSdCardSafely(context, sourceFile)) {
+                             moveSuccess = true;
+                         }
                     } else {
-                        Log.w(TAG, "renameTo failed for " + sourceFile.getAbsolutePath() + ". Falling back to copy-delete.");
-                        if (copyFile(sourceFile, destFile)) {
-                            if (StorageUtils.deleteFile(context, sourceFile)) {
-                                moveSuccess = true;
-                            } else {
-                                Log.e(TAG, "Failed to delete original file " + sourceFile.getAbsolutePath() + " after copy. Deleting copied file to prevent duplication.");
-                                destFile.delete();
-                                moveSuccess = false;
+                         // Existing phone-to-phone or cross-volume copy logic
+                        File destFile = new File(recycleBinDir, sourceFile.getName());
+                        // handle conflicts...
+                         if (destFile.exists()) {
+                            String name = sourceFile.getName();
+                            String extension = "";
+                            int dotIndex = name.lastIndexOf(".");
+                            if (dotIndex > 0) {
+                                extension = name.substring(dotIndex);
+                                name = name.substring(0, dotIndex);
                             }
+                            destFile = new File(recycleBinDir, name + "_" + System.currentTimeMillis() + extension);
+                        }
+
+                        if (sourceFile.renameTo(destFile)) {
+                            moveSuccess = true;
                         } else {
-                            Log.e(TAG, "Copy-delete fallback failed to copy file: " + sourceFile.getAbsolutePath());
-                            moveSuccess = false;
+                            if (StorageUtils.copyFile(context, sourceFile, destFile)) {
+                                if (StorageUtils.deleteFile(context, sourceFile)) {
+                                    moveSuccess = true;
+                                } else {
+                                    destFile.delete();
+                                }
+                            }
                         }
                     }
 
                     if (moveSuccess) {
                         movedResults.add(result);
                         sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(sourceFile)));
-                        sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(destFile)));
-                    } else {
-                        Log.w(TAG, "Failed to move file to recycle bin: " + sourceFile.getAbsolutePath());
+                        if(!useSdCardBin) sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(new File(recycleBinDir, sourceFile.getName())))); // scan destination only if known path
                     }
                 }
             }
@@ -1101,7 +1135,6 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                 }
                 return true;
             } catch (IOException e) {
-                Log.e(TAG, "Standard file copy failed, attempting with StorageUtils", e);
                 return StorageUtils.copyFile(context, source, destination);
             } finally {
                 try {
