@@ -11,10 +11,6 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
-import androidx.core.content.ContextCompat;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.MenuItem;
@@ -26,6 +22,12 @@ import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.core.content.ContextCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import java.io.File;
 import java.io.FileFilter;
 import java.util.ArrayList;
@@ -36,11 +38,12 @@ import java.util.List;
 
 public class AdvancedFilePickerActivity extends Activity {
 
+    // UI Elements
     private ImageButton backButton, filterButton;
     private TextView pathTextView, selectionCountTextView;
     private EditText searchInput;
     private RecyclerView fileRecyclerView;
-    private Button sendButton, deleteButton, recycleButton; // Added delete/recycle
+    private Button sendButton, deleteButton, recycleButton;
     private LinearLayout loadingView;
 
     private AdvancedFilePickerAdapter adapter;
@@ -61,6 +64,7 @@ public class AdvancedFilePickerActivity extends Activity {
         setupRecyclerView();
         setupBroadcastReceivers();
 
+        // Start at the root of external storage
         navigateTo(rootDirectory);
     }
 
@@ -74,65 +78,69 @@ public class AdvancedFilePickerActivity extends Activity {
         sendButton = findViewById(R.id.button_send_advanced_picker);
         loadingView = findViewById(R.id.loading_view_advanced_picker);
         
-        // These IDs must exist in your layout or be added to the footer
+        // Hooks for new buttons (Enhancement 2 & 4)
         deleteButton = findViewById(R.id.button_delete_advanced_picker);
         recycleButton = findViewById(R.id.button_recycle_advanced_picker);
     }
 
     private void setupRecyclerView() {
         adapter = new AdvancedFilePickerAdapter(this, new ArrayList<File>(), new AdvancedFilePickerAdapter.OnItemClickListener() {
-            @Override
-            public void onFileClicked(AdvancedFilePickerAdapter.FileItem item) {
-                updateSelectionCount();
-            }
+				@Override
+				public void onFileClicked(AdvancedFilePickerAdapter.FileItem item) {
+					updateSelectionCount();
+				}
 
-            @Override
-            public void onFolderClicked(File folder) {
-                navigateTo(folder);
-            }
+				@Override
+				public void onFolderClicked(File folder) {
+					navigateTo(folder);
+				}
 
-            @Override
-            public void onSelectionChanged() {
-                updateSelectionCount();
-            }
-        });
+				@Override
+				public void onSelectionChanged() {
+					updateSelectionCount();
+				}
+			});
         fileRecyclerView.setLayoutManager(new GridLayoutManager(this, 3));
         fileRecyclerView.setAdapter(adapter);
     }
 
     private void setupListeners() {
         backButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                handleBackNavigation();
-            }
-        });
+				@Override
+				public void onClick(View v) {
+					handleBackNavigation();
+				}
+			});
 
         filterButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showFilterMenu(v);
-            }
-        });
+				@Override
+				public void onClick(View v) {
+					showFilterMenu(v);
+				}
+			});
 
         searchInput.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if (adapter != null) {
-                    adapter.getFilter().filter(s);
-                }
-            }
-            @Override public void afterTextChanged(Editable s) {}
-        });
+				@Override
+				public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+				@Override
+				public void onTextChanged(CharSequence s, int start, int before, int count) {
+					if (adapter != null) {
+						adapter.getFilter().filter(s);
+					}
+				}
+
+				@Override
+				public void afterTextChanged(Editable s) {}
+			});
 
         sendButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                sendSelectedFiles();
-            }
-        });
+				@Override
+				public void onClick(View v) {
+					sendSelectedFiles();
+				}
+			});
 
-        // UPDATED: Batch Delete speed selection (Enhancement 4)
         if (deleteButton != null) {
             deleteButton.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -143,6 +151,7 @@ public class AdvancedFilePickerActivity extends Activity {
                         return;
                     }
 
+                    // Enhancement 4: Batch speed selection
                     final String[] batchOptions = {"1 (Single)", "5 at a time", "10 at a time", "20 at a time", "30 at a time"};
                     final int[] batchValues = {1, 5, 10, 20, 30};
 
@@ -158,7 +167,6 @@ public class AdvancedFilePickerActivity extends Activity {
             });
         }
 
-        // UPDATED: Dual Recycle Bin selection (Enhancement 2)
         if (recycleButton != null) {
             recycleButton.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -169,6 +177,7 @@ public class AdvancedFilePickerActivity extends Activity {
                         return;
                     }
 
+                    // Enhancement 2: Dual Bin Choice
                     AlertDialog.Builder binBuilder = new AlertDialog.Builder(AdvancedFilePickerActivity.this);
                     binBuilder.setTitle("Choose Recycle Bin");
                     binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
@@ -209,10 +218,9 @@ public class AdvancedFilePickerActivity extends Activity {
         deleteCompletionReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                // FIXED: Use correct extra key for count
                 int deletedCount = intent.getIntExtra(DeleteService.EXTRA_DELETED_COUNT, 0);
                 Toast.makeText(AdvancedFilePickerActivity.this, "Deleted " + deletedCount + " files successfully.", Toast.LENGTH_LONG).show();
-                navigateTo(currentDirectory); // Refresh
+                navigateTo(currentDirectory);
             }
         };
         LocalBroadcastManager.getInstance(this).registerReceiver(deleteCompletionReceiver, new IntentFilter(DeleteService.ACTION_DELETE_COMPLETE));
@@ -264,20 +272,20 @@ public class AdvancedFilePickerActivity extends Activity {
         PopupMenu popup = new PopupMenu(this, v);
         popup.getMenuInflater().inflate(R.menu.filter_menu, popup.getMenu());
         popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-            @Override
-            public boolean onMenuItemClick(MenuItem item) {
-                int itemId = item.getItemId();
-                if (itemId == R.id.filter_all) currentFilterType = "all";
-                else if (itemId == R.id.filter_images) currentFilterType = "images";
-                else if (itemId == R.id.filter_videos) currentFilterType = "videos";
-                else if (itemId == R.id.filter_documents) currentFilterType = "documents";
-                else if (itemId == R.id.filter_archives) currentFilterType = "archives";
-                else if (itemId == R.id.filter_other) currentFilterType = "other";
+				@Override
+				public boolean onMenuItemClick(MenuItem item) {
+					int itemId = item.getItemId();
+					if (itemId == R.id.filter_all) currentFilterType = "all";
+					else if (itemId == R.id.filter_images) currentFilterType = "images";
+					else if (itemId == R.id.filter_videos) currentFilterType = "videos";
+					else if (itemId == R.id.filter_documents) currentFilterType = "documents";
+					else if (itemId == R.id.filter_archives) currentFilterType = "archives";
+					else if (itemId == R.id.filter_other) currentFilterType = "other";
 
-                navigateTo(currentDirectory);
-                return true;
-            }
-        });
+					navigateTo(currentDirectory);
+					return true;
+				}
+			});
         popup.show();
     }
 
@@ -295,25 +303,35 @@ public class AdvancedFilePickerActivity extends Activity {
             currentDirectory = directory;
 
             File[] files = directory.listFiles(new FileFilter() {
-                @Override
-                public boolean accept(File file) {
-                    if (file.isHidden()) return false;
-                    if (file.isDirectory()) return true;
-                    return isFileTypeMatch(file.getName());
-                }
-            });
+					@Override
+					public boolean accept(File file) {
+						if (file.isHidden()) {
+							return false; 
+						}
+						if (file.isDirectory()) {
+							return true; 
+						}
+						return isFileTypeMatch(file.getName());
+					}
+				});
 
             List<File> fileList = new ArrayList<>();
-            if (files != null) fileList.addAll(Arrays.asList(files));
+            if (files != null) {
+                fileList.addAll(Arrays.asList(files));
+            }
 
             Collections.sort(fileList, new Comparator<File>() {
-                @Override
-                public int compare(File f1, File f2) {
-                    if (f1.isDirectory() && !f2.isDirectory()) return -1;
-                    if (!f1.isDirectory() && f2.isDirectory()) return 1;
-                    return f1.getName().compareToIgnoreCase(f2.getName());
-                }
-            });
+					@Override
+					public int compare(File f1, File f2) {
+						if (f1.isDirectory() && !f2.isDirectory()) {
+							return -1;
+						} else if (!f1.isDirectory() && f2.isDirectory()) {
+							return 1;
+						} else {
+							return f1.getName().compareToIgnoreCase(f2.getName());
+						}
+					}
+				});
             return fileList;
         }
 
@@ -323,15 +341,23 @@ public class AdvancedFilePickerActivity extends Activity {
             pathTextView.setText(currentDirectory.getAbsolutePath());
 
             adapter = new AdvancedFilePickerAdapter(AdvancedFilePickerActivity.this, fileList, new AdvancedFilePickerAdapter.OnItemClickListener() {
-                @Override
-                public void onFileClicked(AdvancedFilePickerAdapter.FileItem item) { updateSelectionCount(); }
-                @Override
-                public void onFolderClicked(File folder) { navigateTo(folder); }
-                @Override
-                public void onSelectionChanged() { updateSelectionCount(); }
-            });
+					@Override
+					public void onFileClicked(AdvancedFilePickerAdapter.FileItem item) {
+						updateSelectionCount();
+					}
+
+					@Override
+					public void onFolderClicked(File folder) {
+						navigateTo(folder);
+					}
+
+					@Override
+					public void onSelectionChanged() {
+						updateSelectionCount();
+					}
+				});
             fileRecyclerView.setAdapter(adapter);
-            updateSelectionCount();
+            updateSelectionCount(); 
 
             loadingView.setVisibility(View.GONE);
             fileRecyclerView.setVisibility(View.VISIBLE);
@@ -339,23 +365,32 @@ public class AdvancedFilePickerActivity extends Activity {
     }
 
     private boolean isFileTypeMatch(String fileName) {
-        if ("all".equals(currentFilterType)) return true;
+        if ("all".equals(currentFilterType)) {
+            return true;
+        }
         String extension = "";
         int i = fileName.lastIndexOf('.');
-        if (i > 0) extension = fileName.substring(i + 1).toLowerCase();
+        if (i > 0) {
+            extension = fileName.substring(i + 1).toLowerCase();
+        }
 
         switch (currentFilterType) {
-            case "images": return Arrays.asList("jpg", "jpeg", "png", "gif", "bmp", "webp").contains(extension);
-            case "videos": return Arrays.asList("mp4", "3gp", "mkv", "webm", "avi").contains(extension);
-            case "documents": return Arrays.asList("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt").contains(extension);
-            case "archives": return Arrays.asList("zip", "rar", "7z", "tar", "gz").contains(extension);
+            case "images":
+                return Arrays.asList("jpg", "jpeg", "png", "gif", "bmp", "webp").contains(extension);
+            case "videos":
+                return Arrays.asList("mp4", "3gp", "mkv", "webm", "avi").contains(extension);
+            case "documents":
+                return Arrays.asList("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt").contains(extension);
+            case "archives":
+                return Arrays.asList("zip", "rar", "7z", "tar", "gz").contains(extension);
             case "other":
-                boolean isImg = Arrays.asList("jpg", "jpeg", "png", "gif", "bmp", "webp").contains(extension);
-                boolean isVid = Arrays.asList("mp4", "3gp", "mkv", "webm", "avi").contains(extension);
+                boolean isImage = Arrays.asList("jpg", "jpeg", "png", "gif", "bmp", "webp").contains(extension);
+                boolean isVideo = Arrays.asList("mp4", "3gp", "mkv", "webm", "avi").contains(extension);
                 boolean isDoc = Arrays.asList("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt").contains(extension);
-                boolean isArc = Arrays.asList("zip", "rar", "7z", "tar", "gz").contains(extension);
-                return !isImg && !isVid && !isDoc && !isArc;
-            default: return false;
+                boolean isArchive = Arrays.asList("zip", "rar", "7z", "tar", "gz").contains(extension);
+                return !isImage && !isVideo && !isDoc && !isArchive;
+            default:
+                return false;
         }
     }
 
