@@ -52,7 +52,7 @@ public class DeleteService extends IntentService {
         }
 
         ArrayList<String> filePathsToDelete = intent.getStringArrayListExtra(EXTRA_FILES_TO_DELETE);
-        // NEW: Retrieve batch size, default to 1 (single delete) if not provided
+        // Enhancement 4: Retrieve chosen batch size
         int batchSize = intent.getIntExtra("batch_size", 1);
 
         if (filePathsToDelete == null || filePathsToDelete.isEmpty()) {
@@ -69,7 +69,6 @@ public class DeleteService extends IntentService {
                 canShowNotification = true;
             }
         } else {
-            // On older versions, permission is not needed
             canShowNotification = true;
         }
 
@@ -77,7 +76,7 @@ public class DeleteService extends IntentService {
             startForeground(NOTIFICATION_ID, createNotification("Starting deletion...", 0, totalFiles));
         }
 
-        // NEW LOGIC: Process deletions in batches
+        // Logic for Batch Processing (Enhancement 4)
         for (int i = 0; i < totalFiles; i += batchSize) {
             int end = Math.min(i + batchSize, totalFiles);
             List<String> batchPaths = filePathsToDelete.subList(i, end);
@@ -87,17 +86,17 @@ public class DeleteService extends IntentService {
                 batchFiles.add(new File(path));
             }
 
-            // Call the new optimized batch delete method in FileUtils
+            // Call optimized bulk delete and sum the results for the Toast fix
             deletedCount += FileUtils.deleteFileBatch(this, batchFiles);
 
-            // Update notification only once per batch to reduce system load
+            // --- UPDATE 3: Check permission again before updating the notification ---
             if (canShowNotification) {
                 String progressText = "Deleted " + Math.min(i + batchSize, totalFiles) + " of " + totalFiles + "...";
                 notificationManager.notify(NOTIFICATION_ID, createNotification(progressText, Math.min(i + batchSize, totalFiles), totalFiles));
             }
         }
 
-        // Send completion broadcast
+        // Send completion broadcast with the accurate count (Toast fix)
         Intent broadcastIntent = new Intent(ACTION_DELETE_COMPLETE);
         broadcastIntent.putExtra(EXTRA_DELETED_COUNT, deletedCount);
         LocalBroadcastManager.getInstance(this).sendBroadcast(broadcastIntent);
