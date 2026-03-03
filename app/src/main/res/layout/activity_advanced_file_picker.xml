@@ -118,7 +118,7 @@
         android:layout_below="@id/header_controls_advanced_picker"
         android:padding="4dp" />
 
-    <!-- Footer with Send Button -->
+    <!-- Footer with Action Buttons -->
     <RelativeLayout
         android:id="@+id/footer_advanced_picker"
         android:layout_width="match_parent"
@@ -134,19 +134,48 @@
             android:layout_height="wrap_content"
             android:layout_alignParentStart="true"
             android:layout_centerVertical="true"
+            android:layout_toStartOf="@+id/button_container_advanced_picker"
             android:text="0 files selected"
             android:textColor="@android:color/black"
-            android:textSize="16sp" />
+            android:textSize="14sp" />
 
-        <Button
-            android:id="@+id/button_send_advanced_picker"
-            style="@style/AppButton"
+        <LinearLayout
+            android:id="@+id/button_container_advanced_picker"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignParentEnd="true"
-            android:text="Send" />
+            android:layout_centerVertical="true"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/button_delete_advanced_picker"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Delete"
+                android:textColor="#F44336"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/button_recycle_advanced_picker"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Recycle"
+                android:textColor="?attr/appPrimaryColor"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/button_send_advanced_picker"
+                style="@style/AppButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="Send"
+                android:textSize="12sp" />
+
+        </LinearLayout>
 
     </RelativeLayout>
 
 </RelativeLayout>
-
